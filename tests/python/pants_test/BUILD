@@ -38,6 +38,7 @@ python_library(
     'src/python/pants/task',
     'src/python/pants/util:dirutil',
     'tests/python/pants_test/base:context_utils',
+    'tests/python/pants_test/engine:util',
     'tests/python/pants_test/option/util',
   ]
 )
