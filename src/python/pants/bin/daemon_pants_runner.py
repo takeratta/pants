@@ -196,7 +196,8 @@ class DaemonPantsRunner(ProcessManager):
     in that child process.
     """
     if self._graph_helper:
-      self._graph_helper.scheduler.pre_fork()
+      # TODO: Merge with fork_lock acquisition.
+      self._graph_helper.scheduler.with_fork_context(lambda: None)
 
   def post_fork_child(self):
     """Post-fork child process callback executed via ProcessManager.daemonize()."""

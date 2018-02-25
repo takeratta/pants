@@ -1119,7 +1119,7 @@ impl Node for Task {
     let task = self.task.clone();
     deps
       .then(move |deps_result| match deps_result {
-        Ok(deps) => externs::call(&externs::val_for(&task.func.0), &deps),
+        Ok(deps) => externs::call(&task.func.0, &deps),
         Err(err) => Err(err),
       })
       .to_boxed()

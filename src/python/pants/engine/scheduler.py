@@ -269,8 +269,7 @@ class WrappedNativeScheduler(object):
                                                      execution_request,
                                                      self._to_key(subject),
                                                      self._to_constraint(product))
-    if res.is_throw:
-      raise self._from_value(res.value)
+    self._from_py_result(res)
 
   def visualize_to_dir(self):
     return self._native.visualize_to_dir
@@ -278,8 +277,9 @@ class WrappedNativeScheduler(object):
   def to_keys(self, subjects):
     return list(self._to_key(subject) for subject in subjects)
 
-  def pre_fork(self):
-    self._native.lib.scheduler_pre_fork(self._scheduler)
+  def with_fork_context(self, func):
+    res = self._native.lib.scheduler_fork_context(self._scheduler, Function(self._to_key(func)))
+    return self._from_py_result(res)
 
   def run_and_return_roots(self, execution_request):
     raw_roots = self._native.lib.execution_execute(self._scheduler, execution_request)
@@ -297,6 +297,11 @@ class WrappedNativeScheduler(object):
     finally:
       self._native.lib.nodes_destroy(raw_roots)
     return roots
+
+  def _from_py_result(self, res):
+    if res.is_throw:
+      raise self._from_value(res.value)
+    return res.value
 
   def lease_files_in_graph(self):
     self._native.lib.lease_files_in_graph(self._scheduler)
@@ -417,8 +422,8 @@ class LocalScheduler(object):
   def node_count(self):
     return self._scheduler.graph_len()
 
-  def pre_fork(self):
-    self._scheduler.pre_fork()
+  def with_fork_context(self, func):
+    return self._scheduler.with_fork_context(func)
 
   def schedule(self, execution_request):
     """Yields batches of Steps until the roots specified by the request have been completed.

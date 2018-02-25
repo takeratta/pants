@@ -101,12 +101,6 @@ pub fn project(value: &Value, field: &str, type_id: &TypeId) -> Value {
   })
 }
 
-pub fn project_ignoring_type(value: &Value, field: &str) -> Value {
-  with_externs(|e| {
-    (e.project_ignoring_type)(e.context, value, field.as_ptr(), field.len() as u64)
-  })
-}
-
 pub fn project_multi(value: &Value, field: &str) -> Vec<Value> {
   with_externs(|e| {
     (e.project_multi)(e.context, value, field.as_ptr(), field.len() as u64).to_vec()
@@ -163,14 +157,33 @@ pub fn create_exception(msg: &str) -> Value {
   })
 }
 
-pub fn call_method(value: &Value, method: &str, args: &[Value]) -> Result<Value, Failure> {
-  call(&project_ignoring_type(&value, method), args)
+pub fn call_method(obj: &Key, method: &str, args: &[Value]) -> Result<Value, Failure> {
+  let interns = INTERNS.read().unwrap();
+  with_externs(|e| {
+    let obj_val = interns.get(obj);
+    let func_val =
+      (e.project_ignoring_type)(e.context, obj_val, method.as_ptr(), method.len() as u64);
+    (e.call)(e.context, &func_val, args.as_ptr(), args.len() as u64)
+  }).into()
 }
 
-pub fn call(func: &Value, args: &[Value]) -> Result<Value, Failure> {
+pub fn call(func: &Key, args: &[Value]) -> Result<Value, Failure> {
+  let interns = INTERNS.read().unwrap();
+  let func_val = interns.get(func);
   with_externs(|e| {
-    (e.call)(e.context, func, args.as_ptr(), args.len() as u64)
+    (e.call)(e.context, func_val, args.as_ptr(), args.len() as u64)
   }).into()
+}
+
+///
+/// Calls the given function with exclusive access to all locks managed by this module.
+/// Used to ensure that the main thread forks with all locks acquired.
+///
+pub fn exclusive_call(func: &Key) -> Result<Value, Failure> {
+  // NB: Acquiring the interns exclusively as well.
+  let interns = INTERNS.write().unwrap();
+  let func_val = interns.get(func);
+  with_externs_exclusive(|e| (e.call)(e.context, func_val, vec![].as_ptr(), 0)).into()
 }
 
 ///
@@ -178,10 +191,8 @@ pub fn call(func: &Value, args: &[Value]) -> Result<Value, Failure> {
 /// those configured in types::Types.
 ///
 pub fn unsafe_call(func: &Function, args: &[Value]) -> Value {
-  let interns = INTERNS.read().unwrap();
-  let func_val = interns.get(&func.0);
-  call(func_val, args).unwrap_or_else(|e| {
-    panic!("Core function `{}` failed: {:?}", val_to_str(func_val), e);
+  call(&func.0, args).unwrap_or_else(|e| {
+    panic!("Core function `{}` failed: {:?}", key_to_str(&func.0), e);
   })
 }
 
@@ -190,6 +201,8 @@ pub fn unsafe_call(func: &Function, args: &[Value]) -> Value {
 /////////////////////////////////////////////////////////////////////////////////////////
 
 lazy_static! {
+  // NB: Unfortunately, it's not currently possible to merge these locks, because mutating
+  // the `Interns` requires calls to extern functions, which would be re-entrant.
   static ref EXTERNS: RwLock<Option<Externs>> = RwLock::new(None);
   static ref INTERNS: RwLock<Interns> = RwLock::new(Interns::new());
 }
@@ -208,6 +221,17 @@ where
   F: FnOnce(&Externs) -> T,
 {
   let externs_opt = EXTERNS.read().unwrap();
+  let externs = externs_opt.as_ref().unwrap_or_else(|| {
+    panic!("externs used before static initialization.")
+  });
+  f(externs)
+}
+
+fn with_externs_exclusive<F, T>(f: F) -> T
+where
+  F: FnOnce(&Externs) -> T,
+{
+  let externs_opt = EXTERNS.write().unwrap();
   let externs = externs_opt.as_ref().unwrap_or_else(|| {
     panic!("externs used before static initialization.")
   });
@@ -357,6 +381,21 @@ impl From<Result<(), String>> for PyResult {
   fn from(res: Result<(), String>) -> Self {
     match res {
       Ok(()) => PyResult { is_throw: false, value: eval("None").unwrap() },
+      Err(msg) => PyResult {
+        is_throw: true,
+        value: create_exception(&msg),
+      },
+    }
+  }
+}
+
+impl From<Result<Value, String>> for PyResult {
+  fn from(res: Result<Value, String>) -> Self {
+    match res {
+      Ok(v) => PyResult {
+        is_throw: false,
+        value: v,
+      },
       Err(msg) => PyResult {
         is_throw: true,
         value: create_exception(&msg),

@@ -193,7 +193,7 @@ Scheduler* scheduler_create(Tasks*,
                             Buffer,
                             BufferBuffer,
                             TypeIdBuffer);
-void scheduler_pre_fork(Scheduler*);
+PyResult scheduler_fork_context(Scheduler*, Function);
 void scheduler_destroy(Scheduler*);
 
 
