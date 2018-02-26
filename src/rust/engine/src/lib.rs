@@ -262,8 +262,7 @@ pub extern "C" fn scheduler_fork_context(
   func: Function,
 ) -> PyResult {
   with_scheduler(scheduler_ptr, |scheduler| {
-    scheduler.core.pre_fork();
-    scheduler.core.graph.with_exclusive(|| {
+    scheduler.core.fork_context(|| {
       externs::exclusive_call(&func.0)
         .map_err(|f| format!("{:?}", f))
         .into()

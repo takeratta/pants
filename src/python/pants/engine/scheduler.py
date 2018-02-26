@@ -299,9 +299,10 @@ class WrappedNativeScheduler(object):
     return roots
 
   def _from_py_result(self, res):
+    value = self._from_value(res.value)
     if res.is_throw:
-      raise self._from_value(res.value)
-    return res.value
+      raise value
+    return value
 
   def lease_files_in_graph(self):
     self._native.lib.lease_files_in_graph(self._scheduler)

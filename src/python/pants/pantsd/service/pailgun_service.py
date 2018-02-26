@@ -86,7 +86,6 @@ class PailgunService(PantsService):
         arguments,
         environment,
         graph_helper,
-        self.fork_lock,
         preceding_graph_size,
         deferred_exc
       )

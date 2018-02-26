@@ -74,8 +74,13 @@ impl Core {
     }
   }
 
-  pub fn pre_fork(&self) {
-    self.pool.reset();
+  pub fn fork_context<F, T>(&self, f: F) -> T
+  where
+    F: FnOnce() -> T,
+  {
+    self.pool.with_shutdown(
+      || self.graph.with_exclusive(|| f()),
+    )
   }
 }
 

@@ -73,7 +73,7 @@ class DaemonPantsRunner(ProcessManager):
   N.B. this class is primarily used by the PailgunService in pantsd.
   """
 
-  def __init__(self, socket, exiter, args, env, graph_helper, fork_lock, preceding_graph_size,
+  def __init__(self, socket, exiter, args, env, graph_helper, preceding_graph_size,
                deferred_exception=None):
     """
     :param socket socket: A connected socket capable of speaking the nailgun protocol.
@@ -83,7 +83,6 @@ class DaemonPantsRunner(ProcessManager):
     :param LegacyGraphHelper graph_helper: The LegacyGraphHelper instance to use for BuildGraph
                                            construction. In the event of an exception, this will be
                                            None.
-    :param threading.RLock fork_lock: A lock to use during forking for thread safety.
     :param int preceding_graph_size: The size of the graph pre-warming, for stats.
     :param Exception deferred_exception: A deferred exception from the daemon's graph construction.
                                          If present, this will be re-raised in the client context.
@@ -94,7 +93,6 @@ class DaemonPantsRunner(ProcessManager):
     self._args = args
     self._env = env
     self._graph_helper = graph_helper
-    self._fork_lock = fork_lock
     self._preceding_graph_size = preceding_graph_size
     self._deferred_exception = deferred_exception
 
@@ -185,19 +183,8 @@ class DaemonPantsRunner(ProcessManager):
 
   def run(self):
     """Fork, daemonize and invoke self.post_fork_child() (via ProcessManager)."""
-    with self._fork_lock:
-      self.daemonize(write_pid=False)
-
-  def pre_fork(self):
-    """Pre-fork callback executed via ProcessManager.daemonize().
-
-    The scheduler has thread pools which need to be re-initialized after a fork: this ensures that
-    when the pantsd-runner forks from pantsd, there is a working pool for any work that happens
-    in that child process.
-    """
-    if self._graph_helper:
-      # TODO: Merge with fork_lock acquisition.
-      self._graph_helper.scheduler.with_fork_context(lambda: None)
+    fork_context = self._graph_helper.scheduler.with_fork_context
+    self.daemonize(write_pid=False, fork_context=fork_context)
 
   def post_fork_child(self):
     """Post-fork child process callback executed via ProcessManager.daemonize()."""
