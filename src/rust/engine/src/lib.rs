@@ -15,6 +15,8 @@ mod tasks;
 mod types;
 
 extern crate boxfuture;
+#[macro_use]
+extern crate enum_primitive;
 extern crate fnv;
 extern crate fs;
 extern crate futures;
@@ -123,6 +125,7 @@ impl RawNodes {
 pub extern "C" fn externs_set(
   ext_context: *const ExternContext,
   log: LogExtern,
+  log_level: u8,
   call: CallExtern,
   eval: EvalExtern,
   identify: IdentifyExtern,
@@ -145,6 +148,7 @@ pub extern "C" fn externs_set(
   externs::set_externs(Externs::new(
     ext_context,
     log,
+    log_level,
     call,
     eval,
     identify,
