@@ -31,3 +31,4 @@ subprocess32==3.2.7
 six>=1.9.0,<2
 thrift>=0.9.1
 wheel==0.29.0
+cryptography>=41.0.3 # not directly required, pinned by Snyk to avoid a vulnerability
